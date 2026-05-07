@@ -2,6 +2,22 @@
 
 Système de gestion centralisée d'écrans d'affichage (digital signage). Un **Master** (Flask + SocketIO) pilote une flotte d'**Endpoints** (scripts Python sur les écrans), chacun affichant des médias (images, vidéos, PDF) dans Chromium en mode kiosque.
 
+## Aperçu
+
+### Connexion
+![Page de connexion](assets/loginform.png)
+
+### Tableau de bord principal
+![Accueil — vue de la flotte](assets/acceuil.png)
+
+### Médiathèque
+![Gestion des médias](assets/mediatheque.png)
+
+### Administration des comptes
+![Administration des comptes utilisateurs](assets/administrationcompte.png)
+
+---
+
 ## Architecture
 
 ```
@@ -24,6 +40,11 @@ Système de gestion centralisée d'écrans d'affichage (digital signage). Un **M
 
 ```
 disscreen/
+├── assets/                     # Screenshots de documentation
+│   ├── loginform.png
+│   ├── acceuil.png
+│   ├── mediatheque.png
+│   └── administrationcompte.png
 ├── master/
 │   ├── master.py           # Serveur Flask principal
 │   ├── db.py               # Authentification SQLite + bcrypt
@@ -45,6 +66,8 @@ disscreen/
     └── endpoint.py         # Client kiosque (à déployer sur chaque écran)
 ```
 
+---
+
 ## Ce qu'il faut configurer avant de démarrer
 
 ### 1. Le logo
@@ -54,7 +77,7 @@ Remplacer les fichiers placeholder par votre logo :
 - `master/static/logo.png` — logo affiché dans l'interface web (login, header)
 - `master/static/logo.svg` — (optionnel) version SVG du logo
 
-> Dans `endpoint/endpoint.py`, la fonction `show_wait_screen()` affiche également un logo SVG inline (~ligne 260). Modifier le bloc SVG pour y mettre votre logo ou votre nom d'entreprise.
+> Dans `endpoint/endpoint.py`, la fonction `show_wait_screen()` (~ligne 260) affiche un logo SVG inline sur l'écran en attente. Modifier le bloc SVG pour y mettre votre logo ou votre nom d'entreprise.
 
 ### 2. Le fichier `.env`
 
@@ -67,7 +90,7 @@ Remplir **toutes** les valeurs dans `master/.env` :
 
 | Variable | Description | Exemple |
 |---|---|---|
-| `FLASK_SECRET_KEY` | Clé secrète Flask (générer avec `python3 -c "import secrets; print(secrets.token_hex(32))"`) | `abc123...` |
+| `FLASK_SECRET_KEY` | Clé secrète Flask — générer avec `python3 -c "import secrets; print(secrets.token_hex(32))"` | `abc123...` |
 | `SSH_KEY_USER` | Utilisateur SSH dédié créé par `install.sh` sur les endpoints | `screenuser` |
 | `SSH_PASS_USER` | Utilisateur de session sur les endpoints (fallback avant install.sh) | `pi` ou `ubuntu` |
 | `SSH_PASS` | Mot de passe SSH de l'utilisateur de session (fallback) | `your_password` |
@@ -89,9 +112,9 @@ SESSION_USER="YOUR_SESSION_USER"  # Utilisateur de session graphique sur les end
 
 ### 4. Le nom du service systemd
 
-Le service s'appelle `disscreen` partout (dans `install.sh` et `master.py`). Si vous souhaitez un autre nom, faire un find/replace global sur `disscreen` dans :
+Le service s'appelle `disscreen` partout (dans `install.sh` et `master.py`). Pour le renommer, faire un find/replace global sur `disscreen` dans :
 - `master/install.sh`
-- `master/master.py` (variables `SSH_KEY_PATH`, commentaires)
+- `master/master.py`
 
 ---
 
@@ -178,7 +201,7 @@ Ensuite, gérer les comptes depuis l'interface web (onglet ⚙️ Paramètres �
 ## Checklist déploiement
 
 - [ ] Remplacer `master/static/logo.png` par votre logo
-- [ ] Remplacer le SVG dans `endpoint/endpoint.py` → `show_wait_screen()` par votre logo/nom
+- [ ] Modifier le SVG dans `endpoint/endpoint.py` → `show_wait_screen()` par votre logo/nom
 - [ ] Créer et remplir `master/.env` depuis `.env.example`
 - [ ] Adapter `SESSION_USER` dans `master/install.sh`
 - [ ] Démarrer le master et vérifier `http://YOUR_MASTER_IP:5002`
