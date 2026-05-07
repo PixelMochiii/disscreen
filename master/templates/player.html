@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>ScreenManager · Player</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; background:#050813; color:#e6edf3;
+    overflow:hidden; font-family:'DM Sans',sans-serif;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  }
+
+  .container { position:relative; width:100vw; height:100vh; overflow:hidden; }
+  img, video, canvas {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; background:#000; display:none;
+  }
+  .active { display:block !important; z-index:10; }
+
+  /* ──────────────── WAIT SCREEN — minimal corporate ──────────────── */
+  html, body { background:#fbfbfd; color:#0f172a; }
+  #waiting-screen {
+    position:absolute; inset:0; z-index:5;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:#fbfbfd;
+  }
+  .center {
+    text-align:center; display:flex; flex-direction:column; align-items:center;
+    gap:2.5rem; padding:2rem;
+  }
+  .logo-wrap {
+    width:auto; max-width:340px; opacity:.95;
+  }
+  .logo-wrap img { width:100%; height:auto; display:block; }
+  .meta {
+    display:flex; flex-direction:column; align-items:center; gap:1.2rem;
+  }
+  .pill-wait {
+    display:inline-flex; align-items:center; gap:.7rem;
+    padding:.55rem 1.2rem; border-radius:999px;
+    background:#fff; border:1px solid #e2e8f0;
+    font-size:.78rem; font-weight:600; color:#475569; letter-spacing:.06em;
+    box-shadow:0 1px 2px rgba(15,23,42,.04);
+  }
+  .pill-wait .ld {
+    width:7px; height:7px; border-radius:50%; background:#4e79e9;
+    box-shadow:0 0 0 0 rgba(78,121,233,.4);
+    animation:dotPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes dotPulse {
+    0%   { box-shadow:0 0 0 0 rgba(78,121,233,.45); }
+    70%  { box-shadow:0 0 0 10px rgba(78,121,233,0); }
+    100% { box-shadow:0 0 0 0 rgba(78,121,233,0); }
+  }
+  .ip-info {
+    font-family:'Fira Code', monospace; font-size:.72rem; color:#94a3b8;
+    letter-spacing:.06em;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pill-wait .ld { animation:none; }
+  }
+</style>
+<script src="/static/socket.io.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js'"></script>
+<script src="/static/pdfjs/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.js';</script>
+</head>
+<body>
+  <div class="container">
+    <div id="waiting-screen">
+      <div class="center">
+        <div class="logo-wrap">
+          <img src="/static/logo.png" alt="YOUR_COMPANY"
+               onerror="this.onerror=null;this.src='/media/YOUR_COMPANY.png';this.onerror=()=>{this.style.display='none'};">
+        </div>
+        <div class="meta">
+          <div class="pill-wait">
+            <span class="ld"></span>
+            <span>En attente de configuration</span>
+          </div>
+          <div class="ip-info">{{ player_ip }}</div>
+        </div>
+      </div>
+    </div>
+
+    <img id="img-el">
+    <video id="vid-el" autoplay muted></video>
+    <canvas id="pdf-el"></canvas>
+  </div>
+
+  <script>
+    const socket = io();
+    const playerIp = "{{ player_ip }}";
+    let currentConf = { playlist: [], timer: 10 };
+    let currentIndex = 0;
+    let rotationTimer = null;
+    let pdfDoc = null;
+
+    socket.on('connect', () => {
+      console.log('Player connecté au Master');
+      socket.emit('join_player', { ip: playerIp });
+    });
+
+    socket.on('reload_player', (data) => {
+      currentConf = data;
+      currentIndex = 0;
+      startDisplay();
+    });
+
+    function showWait() {
+      document.getElementById('waiting-screen').style.display = 'flex';
+      document.body.style.background = '#050813';
+    }
+    function hideWait() {
+      document.getElementById('waiting-screen').style.display = 'none';
+      document.body.style.background = '#000';
+    }
+
+    function startDisplay() {
+      const playlist = currentConf.playlist;
+      const img = document.getElementById('img-el');
+      const vid = document.getElementById('vid-el');
+      const pdf = document.getElementById('pdf-el');
+
+      clearTimeout(rotationTimer);
+      img.classList.remove('active');
+      vid.classList.remove('active');
+      pdf.classList.remove('active');
+      vid.pause();
+      if (pdfDoc) { pdfDoc.destroy(); pdfDoc = null; }
+
+      if (!playlist || playlist.length === 0) { showWait(); return; }
+      hideWait();
+
+      const file = playlist[currentIndex];
+      const isVid = file.match(/\.(mp4|webm)$/i);
+      const isPdf = file.match(/\.pdf$/i);
+
+      if (isVid) {
+        vid.src = '/media/' + file;
+        vid.classList.add('active');
+        vid.play();
+        vid.onended = next;
+      } else if (isPdf) {
+        pdf.classList.add('active');
+        pdfjsLib.getDocument('/media/' + file).promise.then(doc => {
+          pdfDoc = doc;
+          renderPdfPage(1);
+        });
+      } else {
+        img.src = '/media/' + file;
+        img.classList.add('active');
+        rotationTimer = setTimeout(next, currentConf.timer * 1000);
+      }
+    }
+
+    function renderPdfPage(num) {
+      if (!pdfDoc) return;
+      pdfDoc.getPage(num).then(page => {
+        const canvas = document.getElementById('pdf-el');
+        const ctx = canvas.getContext('2d');
+        const v0 = page.getViewport({scale: 1});
+        const scale = Math.min(window.innerWidth / v0.width, window.innerHeight / v0.height);
+        const vp = page.getViewport({ scale });
+        canvas.height = vp.height;
+        canvas.width = vp.width;
+        canvas.style.top = ((window.innerHeight - vp.height) / 2) + 'px';
+        canvas.style.left = ((window.innerWidth - vp.width) / 2) + 'px';
+        canvas.style.width = vp.width + 'px';
+        canvas.style.height = vp.height + 'px';
+        page.render({ canvasContext: ctx, viewport: vp }).promise.then(() => {
+          rotationTimer = setTimeout(() => {
+            if (num >= pdfDoc.numPages) next();
+            else renderPdfPage(num + 1);
+          }, currentConf.timer * 1000);
+        });
+      });
+    }
+
+    function next() {
+      if (!currentConf.playlist || currentConf.playlist.length === 0) return;
+      currentIndex = (currentIndex + 1) % currentConf.playlist.length;
+      startDisplay();
+    }
+  </script>
+</body>
+</html>

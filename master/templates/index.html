@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScreenManager · Master</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<style>
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+:root{
+  --bg:#050813; --bg-2:#0a0e1f; --bg-3:#0d1226;
+  --surface:rgba(255,255,255,.04); --surface-h:rgba(255,255,255,.07);
+  --surface-2:rgba(255,255,255,.06);
+  --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.12);
+  --fg:#e6edf3; --fg-2:#c9d1d9; --muted:#8b95a8; --muted-2:#6b7387;
+  --kal-teal:#1be1bd; --kal-blue:#4e79e9; --kal-purple:#a855f7;
+  --success:#22c55e; --warning:#f59e0b; --danger:#ef4444;
+  --shadow-sm:0 4px 12px -2px rgba(0,0,0,.3);
+  --shadow:0 20px 60px -15px rgba(0,0,0,.5);
+  --shadow-lg:0 30px 80px -20px rgba(0,0,0,.6);
+  --grad:linear-gradient(135deg, var(--kal-teal) 0%, var(--kal-blue) 100%);
+  --grad-rev:linear-gradient(135deg, var(--kal-blue) 0%, var(--kal-teal) 100%);
+}
+html, body { background:var(--bg); color:var(--fg); height:100%; overflow:hidden;
+  font-family:'DM Sans', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+
+/* AURORA BACKGROUND */
+body::before, body::after {
+  content:''; position:fixed; border-radius:50%;
+  filter:blur(140px); opacity:.45; pointer-events:none; z-index:0;
+  animation:drift 22s ease-in-out infinite alternate;
+}
+body::before { width:55vmax; height:55vmax; top:-25vmax; left:-15vmax;
+  background:radial-gradient(circle, var(--kal-blue) 0%, transparent 70%); }
+body::after { width:50vmax; height:50vmax; bottom:-20vmax; right:-10vmax;
+  background:radial-gradient(circle, var(--kal-teal) 0%, transparent 70%); animation-delay:-11s; }
+@keyframes drift { 0%{transform:translate(0,0) scale(1)} 50%{transform:translate(8%,-6%) scale(1.15)} 100%{transform:translate(-6%,8%) scale(.95)} }
+
+.grid-bg { position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size:60px 60px;
+  -webkit-mask-image:radial-gradient(ellipse at 60% 40%, black 0%, transparent 90%);
+  mask-image:radial-gradient(ellipse at 60% 40%, black 0%, transparent 90%); }
+
+/* SCROLLBARS */
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08); border-radius:10px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.15); }
+
+/* APP SHELL */
+.app { position:relative; z-index:1; height:100vh; display:flex; flex-direction:column; }
+
+/* HEADER */
+.header {
+  flex-shrink:0; padding:1rem 2rem; display:flex; align-items:center; justify-content:space-between;
+  background:rgba(5,8,19,.6); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  border-bottom:1px solid var(--border);
+  z-index:50;
+}
+.brand { display:flex; align-items:center; gap:1rem; }
+
+/* Mini 3D monitor for header */
+.mini-scene { width:46px; height:34px; perspective:120px; flex-shrink:0; }
+.mini-monitor {
+  width:100%; height:100%; position:relative; transform-style:preserve-3d;
+  animation:miniFloat 4s ease-in-out infinite;
+  transform:rotateY(-22deg) rotateX(12deg);
+}
+.mini-front {
+  position:absolute; inset:0; background:#0a0e1a;
+  border:2px solid #1f2937; border-radius:5px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:
+    inset 0 0 10px rgba(78,121,233,.5),
+    0 6px 20px -4px rgba(78,121,233,.4);
+}
+.mini-front img {
+  width:62%; filter:drop-shadow(0 0 5px rgba(78,121,233,.7));
+}
+.mini-front::after {
+  content:''; position:absolute; left:0; right:0; height:1.5px;
+  background:linear-gradient(90deg, transparent, rgba(27,225,189,.8), transparent);
+  box-shadow:0 0 8px rgba(27,225,189,.6);
+  animation:miniScan 3s linear infinite;
+}
+@keyframes miniFloat {
+  0%,100% { transform:rotateY(-22deg) rotateX(12deg) translateY(0); }
+  50%     { transform:rotateY(8deg) rotateX(-3deg) translateY(-3px); }
+}
+@keyframes miniScan { 0%{top:-2px} 100%{top:120%} }
+.brand-text h1 {
+  font-size:1.05rem; font-weight:900; letter-spacing:-.02em; line-height:1; color:var(--fg);
+}
+.brand-text p {
+  font-size:.6rem; font-weight:700; letter-spacing:.35em; color:var(--muted);
+  text-transform:uppercase; margin-top:.3rem;
+}
+
+.nav-pills {
+  display:flex; gap:.4rem; padding:.4rem; border-radius:14px;
+  background:var(--surface); border:1px solid var(--border);
+}
+.tab {
+  padding:.6rem 1.1rem; border-radius:10px; cursor:pointer;
+  background:transparent; color:var(--muted); border:none; outline:none;
+  font:700 .75rem 'DM Sans', sans-serif; letter-spacing:.05em;
+  display:flex; align-items:center; gap:.5rem;
+  transition:all .25s ease; text-transform:uppercase;
+}
+.tab:hover { color:var(--fg); background:var(--surface-h); }
+.tab.active {
+  background:var(--grad); color:#0a0e1a;
+  box-shadow:0 4px 12px -2px rgba(78,121,233,.4);
+}
+.tab svg { width:14px; height:14px; }
+
+.header-right { display:flex; align-items:center; gap:.8rem; }
+.live-pill {
+  display:flex; align-items:center; gap:.6rem; padding:.5rem .9rem;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  font-family:'Fira Code', monospace; font-size:.7rem; color:var(--muted-2);
+}
+.live-pill .ld {
+  width:7px; height:7px; border-radius:50%; background:var(--kal-teal);
+  box-shadow:0 0 10px var(--kal-teal); animation:liveBlink 1.5s ease-in-out infinite;
+}
+@keyframes liveBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.icon-btn {
+  width:42px; height:42px; border-radius:12px; border:1px solid var(--border);
+  background:var(--surface); color:var(--muted); cursor:pointer; outline:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .25s ease;
+}
+.icon-btn:hover { background:var(--surface-h); color:var(--fg); border-color:var(--border-2); transform:translateY(-2px); }
+.icon-btn.danger:hover { color:var(--danger); border-color:rgba(239,68,68,.4); box-shadow:0 8px 20px -6px rgba(239,68,68,.3); }
+.icon-btn svg { width:18px; height:18px; stroke-width:2; }
+
+.user-tag {
+  display:flex; align-items:center; gap:.5rem; padding:.5rem .9rem;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  font-size:.75rem; font-weight:700; color:var(--fg); letter-spacing:-.01em;
+}
+.user-tag svg { width:14px; height:14px; color:var(--kal-teal); }
+
+/* MAIN */
+.main { flex:1; overflow:hidden; position:relative; }
+.view {
+  position:absolute; inset:0; overflow-y:auto; padding:2rem 2.5rem 4rem;
+  display:none; animation:fadeUp .5s cubic-bezier(.16,1,.3,1);
+}
+.view.active { display:block; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+.section-head {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  margin-bottom:2rem; flex-wrap:wrap; gap:1rem;
+}
+.section-title {
+  font-size:2.2rem; font-weight:900; line-height:1; letter-spacing:-.03em;
+  background:linear-gradient(180deg, #fff 0%, rgba(255,255,255,.55) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.section-sub { font-size:.7rem; font-weight:700; color:var(--muted); letter-spacing:.3em; text-transform:uppercase; margin-top:.6rem; }
+.section-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
+
+/* BUTTONS */
+.btn {
+  position:relative; display:inline-flex; align-items:center; gap:.5rem;
+  padding:.75rem 1.2rem; border-radius:12px; cursor:pointer; outline:none;
+  border:1px solid var(--border); background:var(--surface); color:var(--fg);
+  font:700 .75rem 'DM Sans', sans-serif; letter-spacing:.06em; text-transform:uppercase;
+  transition:all .25s ease; white-space:nowrap;
+}
+.btn:hover { background:var(--surface-h); border-color:var(--border-2); transform:translateY(-2px); box-shadow:var(--shadow-sm); }
+.btn svg { width:14px; height:14px; }
+
+.btn.primary {
+  background:var(--grad); color:#0a0e1a; border:none;
+  box-shadow:0 8px 20px -8px rgba(78,121,233,.5);
+}
+.btn.primary:hover { box-shadow:0 14px 30px -8px rgba(78,121,233,.6), 0 0 30px rgba(27,225,189,.2); }
+.btn.warning { color:var(--warning); border-color:rgba(245,158,11,.3); background:rgba(245,158,11,.06); }
+.btn.warning:hover { background:rgba(245,158,11,.12); border-color:rgba(245,158,11,.5); }
+.btn.danger { color:var(--danger); border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.06); }
+
+/* STAT STRIP */
+.stat-strip {
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+  gap:1rem; margin-bottom:2rem;
+}
+.stat {
+  padding:1.2rem 1.4rem; border-radius:18px;
+  background:var(--surface); border:1px solid var(--border);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  position:relative; overflow:hidden;
+}
+.stat::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:var(--grad); opacity:.5;
+}
+.stat .label { font-size:.6rem; font-weight:700; letter-spacing:.25em; color:var(--muted-2); text-transform:uppercase; }
+.stat .val { font:900 1.8rem 'DM Sans'; line-height:1; margin-top:.5rem; letter-spacing:-.02em; }
+.stat .val.gradient {
+  background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.stat .sub { font-size:.7rem; color:var(--muted); margin-top:.3rem; font-weight:500; }
+
+/* PENDING ZONE */
+.pending-zone { display:grid; gap:.8rem; margin-bottom:1.5rem; }
+.pending-zone:empty { display:none; }
+.pending-card {
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:1rem 1.4rem; border-radius:14px;
+  background:rgba(245,158,11,.06); border:1px solid rgba(245,158,11,.25);
+  backdrop-filter:blur(12px);
+}
+.pending-card .info { display:flex; align-items:center; gap:1rem; min-width:0; }
+.pending-card .pulse {
+  width:36px; height:36px; border-radius:10px; flex-shrink:0;
+  background:rgba(245,158,11,.15); color:var(--warning);
+  display:flex; align-items:center; justify-content:center;
+  animation:liveBlink 2s ease-in-out infinite;
+}
+.pending-card .pulse svg { width:18px; height:18px; }
+.pending-card h4 { font-size:.85rem; font-weight:800; letter-spacing:-.01em; }
+.pending-card p { font-family:'Fira Code', monospace; font-size:.65rem; color:var(--muted); }
+.pending-card .pending-actions { display:flex; gap:.4rem; flex-shrink:0; }
+
+/* FLEET BENTO GRID — compact */
+.fleet-grid {
+  display:grid; gap:.9rem;
+  grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+}
+.screen-card {
+  position:relative; padding:.7rem; border-radius:16px;
+  background:var(--surface); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border); overflow:hidden;
+  transition:transform .35s cubic-bezier(.16,1,.3,1), box-shadow .3s ease, border-color .3s ease;
+  display:flex; flex-direction:column; gap:.7rem;
+}
+.screen-card:hover {
+  transform:translateY(-4px); border-color:var(--border-2);
+  box-shadow:var(--shadow), 0 0 40px rgba(78,121,233,.1);
+}
+
+.preview {
+  position:relative; aspect-ratio:16/9; border-radius:10px; overflow:hidden;
+  background:linear-gradient(135deg, var(--bg-2), var(--bg-3));
+  border:1px solid var(--border);
+}
+.preview img { width:100%; height:100%; object-fit:cover; }
+.preview .placeholder {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:rgba(255,255,255,.06); font-size:2rem;
+}
+.preview .placeholder svg { width:32px; height:32px; }
+.preview .live-badge {
+  position:absolute; top:.45rem; left:.45rem;
+  display:flex; align-items:center; gap:.3rem;
+  padding:.22rem .5rem; border-radius:6px;
+  background:rgba(0,0,0,.6); backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:.5rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+}
+.preview .live-badge .ld {
+  width:5px; height:5px; border-radius:50%;
+  animation:liveBlink 1.4s ease-in-out infinite;
+}
+.preview .live-badge.online .ld { background:var(--success); box-shadow:0 0 8px var(--success); }
+.preview .live-badge.online { color:var(--success); }
+.preview .live-badge.offline .ld { background:var(--muted-2); }
+.preview .live-badge.offline { color:var(--muted); }
+
+.preview .refresh-btn {
+  position:absolute; bottom:.45rem; right:.45rem;
+  width:26px; height:26px; border-radius:7px; cursor:pointer;
+  background:rgba(0,0,0,.6); backdrop-filter:blur(8px); color:#fff;
+  border:1px solid rgba(255,255,255,.08); outline:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .25s ease;
+}
+.preview .refresh-btn:hover { background:rgba(255,255,255,.15); transform:rotate(90deg); }
+.preview .refresh-btn svg { width:11px; height:11px; }
+
+.screen-info { flex:1; display:flex; flex-direction:column; gap:.55rem; }
+.screen-row { display:flex; align-items:center; justify-content:space-between; gap:.4rem; }
+.screen-name { display:flex; align-items:center; gap:.35rem; min-width:0; }
+.screen-name h3 {
+  font-size:.85rem; font-weight:800; letter-spacing:-.01em; line-height:1.1;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rename-pen {
+  width:20px; height:20px; flex-shrink:0;
+  background:transparent; border:none; cursor:pointer; outline:none;
+  color:var(--muted-2); transition:all .2s ease;
+  display:flex; align-items:center; justify-content:center; border-radius:5px;
+}
+.rename-pen:hover { color:var(--kal-teal); background:var(--surface); }
+.rename-pen svg { width:11px; height:11px; }
+.status-chip {
+  flex-shrink:0; padding:.18rem .5rem; border-radius:999px;
+  font-size:.5rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+}
+.status-chip.online { background:rgba(34,197,94,.15); color:var(--success); border:1px solid rgba(34,197,94,.25); }
+.status-chip.offline { background:rgba(139,149,168,.1); color:var(--muted); border:1px solid var(--border); }
+
+.ip-line {
+  font-family:'Fira Code', monospace; font-size:.62rem; color:var(--muted-2);
+  letter-spacing:.04em; font-weight:500;
+}
+
+.config-pair { display:grid; grid-template-columns:1fr 1fr; gap:.4rem; }
+.config-cell {
+  padding:.45rem .6rem; border-radius:8px;
+  background:rgba(255,255,255,.02); border:1px solid var(--border);
+}
+.config-cell .l { font-size:.48rem; font-weight:800; letter-spacing:.18em; color:var(--muted-2); text-transform:uppercase; }
+.config-cell .v { display:flex; align-items:baseline; gap:.3rem; margin-top:.25rem; }
+.config-cell input {
+  width:32px; background:transparent; color:var(--fg); border:none; outline:none;
+  font:800 .85rem 'DM Sans'; letter-spacing:-.02em; padding:0;
+}
+.config-cell .unit { font-size:.48rem; font-weight:700; color:var(--muted-2); letter-spacing:.12em; text-transform:uppercase; }
+.config-cell .v.big { font:800 .85rem 'DM Sans'; letter-spacing:-.02em; color:var(--fg); }
+
+.actions { display:flex; gap:.3rem; align-items:center; }
+.actions .btn { flex:1; justify-content:center; padding:.5rem; font-size:.65rem; }
+.actions .btn svg { width:12px; height:12px; }
+.action-mini {
+  width:30px; height:30px; flex-shrink:0; border-radius:7px;
+  background:var(--surface); border:1px solid var(--border); color:var(--muted);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; outline:none;
+  transition:all .25s ease;
+}
+.action-mini:hover { background:var(--surface-h); color:var(--fg); transform:translateY(-2px); }
+.action-mini.danger:hover { color:var(--danger); border-color:rgba(239,68,68,.3); }
+.action-mini.warning:hover { color:var(--warning); border-color:rgba(245,158,11,.3); }
+.action-mini.success:hover { color:var(--success); border-color:rgba(34,197,94,.3); }
+.action-mini svg { width:12px; height:12px; }
+
+.empty-state {
+  grid-column:1/-1; padding:6rem 2rem; text-align:center;
+  background:var(--surface); border:1px dashed var(--border-2); border-radius:24px;
+  color:var(--muted-2);
+}
+.empty-state .icon {
+  width:64px; height:64px; margin:0 auto 1.2rem; border-radius:18px;
+  background:var(--surface-h); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+}
+.empty-state .icon svg { width:28px; height:28px; color:var(--muted-2); }
+.empty-state h3 { font-size:1.1rem; font-weight:800; color:var(--fg); margin-bottom:.5rem; letter-spacing:-.01em; }
+.empty-state p { font-size:.85rem; max-width:400px; margin:0 auto; line-height:1.5; }
+
+/* MEDIA VIEW */
+.media-layout { display:grid; grid-template-columns:240px 1fr; gap:2rem; }
+.folder-list-wrap { position:sticky; top:0; }
+.folder-list-title { font-size:.6rem; font-weight:800; letter-spacing:.3em; color:var(--muted-2); text-transform:uppercase; margin-bottom:1rem; padding:0 .8rem; }
+.folder-list { display:flex; flex-direction:column; gap:.3rem; }
+.folder-item { display:flex; align-items:center; gap:.4rem; }
+.folder-item .fbtn {
+  flex:1; padding:.7rem 1rem; border-radius:11px; cursor:pointer; outline:none;
+  background:transparent; color:var(--muted); border:1px solid transparent;
+  font:600 .8rem 'DM Sans'; display:flex; align-items:center; gap:.6rem;
+  transition:all .2s ease;
+}
+.folder-item .fbtn:hover { background:var(--surface); color:var(--fg); }
+.folder-item .fbtn.active {
+  background:var(--surface); border-color:var(--border-2); color:var(--fg);
+  box-shadow:0 4px 12px -4px rgba(78,121,233,.2);
+}
+.folder-item .fbtn.active svg { color:var(--kal-teal); }
+.folder-item .fbtn svg { width:14px; height:14px; }
+.folder-item .pen {
+  display:none; width:28px; height:28px; border-radius:8px; cursor:pointer;
+  background:transparent; border:none; color:var(--muted-2); outline:none;
+  align-items:center; justify-content:center; transition:all .2s ease;
+}
+.folder-item:hover .pen { display:flex; }
+.folder-item .pen:hover { background:var(--surface-h); color:var(--fg); }
+.folder-item .pen.danger:hover { color:var(--danger); }
+.folder-item .pen svg { width:13px; height:13px; }
+
+.media-gallery {
+  display:grid; gap:1rem;
+  grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+}
+.media-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  overflow:hidden; position:relative; transition:all .3s ease;
+}
+.media-card:hover { transform:translateY(-4px); border-color:var(--border-2); box-shadow:var(--shadow-sm); }
+.media-thumb {
+  aspect-ratio:4/3; background:linear-gradient(135deg, var(--bg-2), var(--bg-3));
+  position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center;
+}
+.media-thumb img, .media-thumb video { width:100%; height:100%; object-fit:cover; }
+.media-thumb .pdf-mark {
+  display:flex; flex-direction:column; gap:.5rem; align-items:center;
+  color:var(--kal-blue);
+}
+.media-thumb .pdf-mark svg { width:32px; height:32px; }
+.media-thumb .pdf-mark span { font-size:.6rem; font-weight:800; letter-spacing:.3em; }
+
+.media-overlay {
+  position:absolute; inset:0; background:rgba(5,8,19,.75); backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center; gap:.6rem;
+  opacity:0; transition:opacity .25s ease;
+}
+.media-card:hover .media-overlay { opacity:1; }
+.media-overlay button {
+  width:38px; height:38px; border-radius:10px; cursor:pointer; outline:none;
+  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.15); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .2s ease;
+}
+.media-overlay button:hover { transform:scale(1.1); }
+.media-overlay button.send:hover { background:var(--kal-blue); border-color:var(--kal-blue); color:#0a0e1a; }
+.media-overlay button.edit:hover { background:var(--warning); border-color:var(--warning); color:#0a0e1a; }
+.media-overlay button.del:hover { background:var(--danger); border-color:var(--danger); color:#fff; }
+.media-overlay button svg { width:16px; height:16px; }
+
+.media-meta {
+  padding:.8rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+}
+.media-meta .info { min-width:0; }
+.media-meta .name { font-size:.75rem; font-weight:700; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-meta .type { font-size:.55rem; font-weight:800; letter-spacing:.2em; color:var(--muted-2); text-transform:uppercase; margin-top:.2rem; }
+.media-meta .zap {
+  width:32px; height:32px; flex-shrink:0; border-radius:8px; cursor:pointer; outline:none;
+  background:var(--grad); color:#0a0e1a; border:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .25s ease;
+}
+.media-meta .zap:hover { transform:translateY(-2px) scale(1.05); box-shadow:0 8px 20px -4px rgba(78,121,233,.5); }
+.media-meta .zap svg { width:14px; height:14px; }
+
+/* DOC VIEW */
+.doc-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.2rem; }
+.doc-card {
+  padding:1.6rem; background:var(--surface); border:1px solid var(--border);
+  border-radius:20px; transition:all .3s ease;
+}
+.doc-card:hover { transform:translateY(-4px); border-color:var(--border-2); }
+.doc-card .head-row { display:flex; align-items:center; gap:.8rem; margin-bottom:1rem; }
+.doc-card .ico {
+  width:42px; height:42px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.doc-card .ico svg { width:20px; height:20px; }
+.doc-card .ico.b { background:rgba(78,121,233,.15); color:var(--kal-blue); }
+.doc-card .ico.t { background:rgba(27,225,189,.15); color:var(--kal-teal); }
+.doc-card .ico.a { background:rgba(245,158,11,.15); color:var(--warning); }
+.doc-card .ico.p { background:rgba(168,85,247,.15); color:var(--kal-purple); }
+.doc-card h3 { font-size:.85rem; font-weight:800; letter-spacing:-.01em; }
+.doc-card p { font-size:.85rem; color:var(--muted); line-height:1.6; }
+
+.help-cta {
+  margin-top:2rem; padding:2.2rem;
+  background:linear-gradient(135deg, rgba(78,121,233,.12), rgba(27,225,189,.06));
+  border:1px solid var(--border-2); border-radius:24px;
+  display:flex; align-items:center; justify-content:space-between; gap:2rem; flex-wrap:wrap;
+}
+.help-cta h3 { font-size:1.3rem; font-weight:900; letter-spacing:-.02em; line-height:1.2; }
+.help-cta p { font-size:.85rem; color:var(--muted); margin-top:.4rem; }
+
+/* ADMIN VIEW */
+.admin-grid { display:grid; grid-template-columns:380px 1fr; gap:2rem; }
+@media (max-width: 900px) { .admin-grid { grid-template-columns:1fr; } }
+.admin-card {
+  padding:1.6rem; background:var(--surface); border:1px solid var(--border);
+  border-radius:20px;
+}
+.admin-card h3 { font-size:.95rem; font-weight:800; letter-spacing:-.01em; margin-bottom:1.2rem; }
+.field { margin-bottom:1rem; }
+.field label { display:block; font-size:.6rem; font-weight:800; letter-spacing:.25em; color:var(--muted-2); text-transform:uppercase; margin-bottom:.5rem; }
+.field input, .field select {
+  width:100%; padding:.85rem 1.1rem; border-radius:11px;
+  background:rgba(255,255,255,.03); color:var(--fg);
+  border:1px solid var(--border); outline:none;
+  font:600 .85rem 'DM Sans', sans-serif; transition:all .2s ease;
+}
+.field input:focus, .field select:focus { border-color:rgba(78,121,233,.5); background:rgba(255,255,255,.05); }
+.users-list { display:grid; gap:.7rem; }
+.user-row {
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:.9rem 1.2rem; background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; transition:all .25s ease;
+}
+.user-row:hover { background:var(--surface-h); }
+.user-row .l { display:flex; align-items:center; gap:.8rem; }
+.user-row .av {
+  width:36px; height:36px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+}
+.user-row .av.admin { background:rgba(168,85,247,.15); color:var(--kal-purple); }
+.user-row .av.user { background:var(--surface-h); color:var(--muted); }
+.user-row .name { font-size:.85rem; font-weight:800; }
+.user-row .role { font-size:.55rem; font-weight:700; letter-spacing:.2em; color:var(--muted-2); text-transform:uppercase; margin-top:.2rem; }
+.user-row .av svg { width:16px; height:16px; }
+
+/* MODAL */
+.modal-overlay {
+  position:fixed; inset:0; z-index:200; display:none;
+  background:rgba(5,8,19,.75); backdrop-filter:blur(16px);
+  align-items:center; justify-content:center; padding:1.5rem;
+  animation:fadeIn .25s ease;
+}
+.modal-overlay.show { display:flex; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.modal {
+  width:100%; max-width:520px; padding:2rem;
+  background:rgba(13,18,38,.85); backdrop-filter:blur(24px);
+  border:1px solid var(--border-2); border-radius:24px;
+  box-shadow:var(--shadow-lg);
+  animation:rise .35s cubic-bezier(.16,1,.3,1);
+}
+@keyframes rise { from{opacity:0;transform:translateY(20px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+.modal-head {
+  display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.5rem;
+}
+.modal-head h2 { font-size:1.3rem; font-weight:900; letter-spacing:-.02em; line-height:1.1; }
+.modal-head p { font-size:.7rem; font-weight:700; color:var(--muted); letter-spacing:.2em; text-transform:uppercase; margin-top:.4rem; }
+.modal-close {
+  width:36px; height:36px; border-radius:10px; cursor:pointer; outline:none;
+  background:var(--surface); border:1px solid var(--border); color:var(--muted);
+  display:flex; align-items:center; justify-content:center; transition:all .2s ease;
+}
+.modal-close:hover { color:var(--danger); border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.05); }
+.modal-close svg { width:16px; height:16px; }
+
+.prov-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+.terminal-log {
+  font-family:'Fira Code', monospace; font-size:.7rem; line-height:1.7;
+  background:#020413; border:1px solid var(--border); border-radius:14px;
+  padding:1rem; height:240px; overflow-y:auto; color:var(--kal-teal);
+}
+.terminal-log div { white-space:pre-wrap; word-break:break-word; }
+.terminal-log div + div { margin-top:.2rem; }
+
+.endpoint-pick { display:flex; flex-direction:column; gap:.5rem; max-height:340px; overflow-y:auto; }
+.endpoint-pick-row {
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:.9rem 1.1rem; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; cursor:pointer; outline:none; transition:all .2s ease; text-align:left;
+}
+.endpoint-pick-row:hover { background:var(--surface-h); border-color:rgba(78,121,233,.3); }
+.endpoint-pick-row .l { display:flex; align-items:center; gap:.8rem; min-width:0; }
+.endpoint-pick-row .ld { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.endpoint-pick-row .ld.online { background:var(--success); box-shadow:0 0 8px var(--success); }
+.endpoint-pick-row .ld.offline { background:var(--muted-2); }
+.endpoint-pick-row .info .name { font-size:.85rem; font-weight:800; letter-spacing:-.01em; }
+.endpoint-pick-row .info .ip { font-family:'Fira Code', monospace; font-size:.65rem; color:var(--muted-2); margin-top:.2rem; }
+.endpoint-pick-row svg { width:14px; height:14px; color:var(--muted-2); }
+
+/* TOAST */
+.toast {
+  position:fixed; bottom:2rem; right:2rem; z-index:300; min-width:340px;
+  padding:1.1rem 1.3rem; border-radius:16px;
+  background:rgba(13,18,38,.92); backdrop-filter:blur(20px);
+  border:1px solid var(--border-2); box-shadow:var(--shadow-lg);
+  display:none; align-items:center; gap:1rem;
+  animation:toastIn .4s cubic-bezier(.16,1,.3,1);
+}
+.toast.show { display:flex; }
+@keyframes toastIn { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:translateX(0)} }
+.toast .ti {
+  width:42px; height:42px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.toast .ti.success { background:rgba(34,197,94,.15); color:var(--success); }
+.toast .ti.error { background:rgba(239,68,68,.15); color:var(--danger); }
+.toast .ti.info { background:rgba(78,121,233,.15); color:var(--kal-blue); }
+.toast .ti svg { width:18px; height:18px; }
+.toast .body { min-width:0; }
+.toast .body h4 { font-size:.65rem; font-weight:800; letter-spacing:.2em; color:var(--muted); text-transform:uppercase; }
+.toast .body p { font-size:.85rem; font-weight:700; color:var(--fg); margin-top:.2rem; }
+
+/* FOOTER */
+.footer {
+  flex-shrink:0; padding:.8rem 2rem; display:flex; align-items:center; justify-content:space-between;
+  background:rgba(5,8,19,.6); backdrop-filter:blur(16px); border-top:1px solid var(--border);
+  font-size:.6rem; font-weight:700; letter-spacing:.25em; color:var(--muted-2); text-transform:uppercase;
+}
+.footer .l { display:flex; align-items:center; gap:1.5rem; }
+.footer .stat-mini { display:flex; align-items:center; gap:.5rem; }
+.footer .stat-mini .ld { width:6px; height:6px; border-radius:50%; background:var(--success); box-shadow:0 0 8px var(--success); animation:liveBlink 1.6s ease-in-out infinite; }
+
+@media (max-width: 900px) {
+  .header { padding:1rem; flex-wrap:wrap; gap:.6rem; }
+  .nav-pills { order:3; width:100%; overflow-x:auto; }
+  .view { padding:1.2rem; }
+  .section-title { font-size:1.6rem; }
+  .media-layout { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after, .logo::before, .live-pill .ld,
+  .pending-card .pulse, .preview .live-badge .ld, .footer .stat-mini .ld
+  { animation:none; }
+}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="app">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="brand">
+    <div class="mini-scene">
+      <div class="mini-monitor">
+        <div class="mini-front">
+          <img src="/static/logo.png" alt="YOUR_COMPANY" onerror="this.style.display='none'">
+        </div>
+      </div>
+    </div>
+    <div class="brand-text">
+      <h1>ScreenManager</h1>
+      <p>Master · Pilote de flotte</p>
+    </div>
+  </div>
+
+  <nav class="nav-pills">
+    <button onclick="switchTab('fleet')" id="tb-fleet" class="tab active">
+      <i data-lucide="layout-dashboard"></i> Flotte
+    </button>
+    <button onclick="switchTab('media')" id="tb-media" class="tab">
+      <i data-lucide="folder-kanban"></i> Médiathèque
+    </button>
+    <button onclick="switchTab('doc')" id="tb-doc" class="tab">
+      <i data-lucide="help-circle"></i> Aide
+    </button>
+    {% if session['is_admin'] %}
+    <button onclick="switchTab('admin'); loadUsers();" id="tb-admin" class="tab">
+      <i data-lucide="shield-check"></i> Admin
+    </button>
+    {% endif %}
+  </nav>
+
+  <div class="header-right">
+    <div class="live-pill">
+      <span class="ld"></span>
+      <span id="clock">00:00:00</span>
+    </div>
+    <div class="user-tag" title="Connecté en tant que">
+      <i data-lucide="user"></i>
+      <span>{{ session['username'] }}</span>
+    </div>
+    <a href="/change-password" class="icon-btn" title="Changer mon mot de passe">
+      <i data-lucide="key-round"></i>
+    </a>
+    <a href="/logout" class="icon-btn danger" title="Déconnexion">
+      <i data-lucide="log-out"></i>
+    </a>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- FLEET VIEW -->
+  <section id="view-fleet" class="view active">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Gestion de flotte</h2>
+        <div class="section-sub">Supervision temps réel</div>
+      </div>
+      <div class="section-actions">
+        <button onclick="window.location.href='/download_client'" class="btn">
+          <i data-lucide="download"></i> Script Client
+        </button>
+        <button onclick="relaunchAll()" class="btn warning">
+          <i data-lucide="refresh-cw"></i> Relancer tout
+        </button>
+        <button onclick="showProvisionModal()" class="btn primary">
+          <i data-lucide="plus"></i> Ajouter écran
+        </button>
+      </div>
+    </div>
+
+    <div class="stat-strip" id="stat-strip"></div>
+    <div id="pending-zone" class="pending-zone"></div>
+    <div id="fleet-grid" class="fleet-grid"></div>
+  </section>
+
+  <!-- MEDIA VIEW -->
+  <section id="view-media" class="view">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Médiathèque</h2>
+        <div class="section-sub">Contenus diffusables</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" onclick="showNewFolder()"><i data-lucide="folder-plus"></i> Dossier</button>
+        <button class="btn primary" onclick="document.getElementById('file-upload').click()">
+          <i data-lucide="upload"></i> Importer
+        </button>
+        <input type="file" id="file-upload" accept="image/*,video/*,.pdf,.ppt,.pptx" multiple hidden onchange="uploadFiles(this.files)">
+      </div>
+    </div>
+
+    <div class="media-layout">
+      <aside class="folder-list-wrap">
+        <div class="folder-list-title">Répertoires</div>
+        <div id="folder-list" class="folder-list"></div>
+      </aside>
+      <div>
+        <div id="media-gallery" class="media-gallery"></div>
+        <div id="media-empty" class="empty-state" style="display:none;">
+          <div class="icon"><i data-lucide="cloud-off"></i></div>
+          <h3>Aucun contenu</h3>
+          <p>Importez des images, vidéos ou PDF depuis le bouton « Importer ».</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOC VIEW -->
+  <section id="view-doc" class="view">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Guide utilisateur</h2>
+        <div class="section-sub">Centre d'aide</div>
+      </div>
+    </div>
+
+    <div class="doc-grid">
+      <div class="doc-card">
+        <div class="head-row">
+          <div class="ico b"><i data-lucide="layout-dashboard"></i></div>
+          <h3>Gestion de la flotte</h3>
+        </div>
+        <p>Surveillez vos écrans en temps réel. Une pastille verte signale un terminal en ligne, grise un terminal hors-ligne. Le bouton « Relancer tout » redémarre la diffusion sur l'ensemble de la flotte.</p>
+      </div>
+      <div class="doc-card">
+        <div class="head-row">
+          <div class="ico t"><i data-lucide="folder-kanban"></i></div>
+          <h3>Médiathèque</h3>
+        </div>
+        <p>Importez images, vidéos ou PDF. Cliquez sur l'icône « envoyer » pour cibler un écran, ou sur l'éclair pour diffuser sur toute la flotte.</p>
+      </div>
+      <div class="doc-card">
+        <div class="head-row">
+          <div class="ico a"><i data-lucide="plug-zap"></i></div>
+          <h3>Provisioning</h3>
+        </div>
+        <p>Saisissez l'IP d'un écran cible avec ses identifiants SSH temporaires. Le master installe automatiquement les dépendances, déploie le client et configure le service systemd.</p>
+      </div>
+      <div class="doc-card">
+        <div class="head-row">
+          <div class="ico p"><i data-lucide="shield-check"></i></div>
+          <h3>Sécurité</h3>
+        </div>
+        <p>Sessions Flask + bcrypt, rate limiting, communications SSH par clé asymétrique après le bootstrap, séparation rôles admin/utilisateur.</p>
+      </div>
+    </div>
+
+    <div class="help-cta">
+      <div>
+        <h3>Besoin d'aide supplémentaire ?</h3>
+        <p>Ouvrez un ticket sur le portail YOUR_COMPANY Help.</p>
+      </div>
+      <a href="https://help.YOUR_COMPANY.net" target="_blank" rel="noopener" class="btn primary">
+        Ouvrir un ticket <i data-lucide="external-link"></i>
+      </a>
+    </div>
+  </section>
+
+  <!-- ADMIN VIEW -->
+  {% if session['is_admin'] %}
+  <section id="view-admin" class="view">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">Administration</h2>
+        <div class="section-sub">Gestion des accès</div>
+      </div>
+    </div>
+
+    <div class="admin-grid">
+      <div class="admin-card">
+        <h3>Créer un compte</h3>
+        <div class="field">
+          <label for="new-username">Identifiant</label>
+          <input id="new-username" type="text" placeholder="prenom.nom">
+        </div>
+        <div class="field">
+          <label for="new-password">Mot de passe</label>
+          <input id="new-password" type="password" placeholder="10 caractères minimum">
+        </div>
+        <div class="field">
+          <label for="new-role">Rôle</label>
+          <select id="new-role">
+            <option value="user">Utilisateur</option>
+            <option value="admin">Administrateur</option>
+          </select>
+        </div>
+        <button onclick="addUser()" class="btn primary" style="width:100%; justify-content:center;">
+          <i data-lucide="user-plus"></i> Créer l'accès
+        </button>
+      </div>
+
+      <div class="admin-card">
+        <h3>Comptes actifs</h3>
+        <div id="users-list" class="users-list"></div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+</main>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="l">
+    <div class="stat-mini"><span class="ld"></span><span>Master Online</span></div>
+    <div class="stat-mini"><i data-lucide="monitor" style="width:11px;height:11px;"></i><span id="fActive">0 écrans</span></div>
+  </div>
+  <div>© 2026 YOUR_COMPANY Système d'Affichage</div>
+</footer>
+
+</div>
+
+<!-- MODAL : PROVISION -->
+<div id="modal-provision" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <p>Provisioning</p>
+        <h2>Nouvel écran</h2>
+      </div>
+      <button onclick="closeProvisionModal()" class="modal-close"><i data-lucide="x"></i></button>
+    </div>
+
+    <div id="prov-form">
+      <div class="field">
+        <label>Adresse IP</label>
+        <input id="prov-ip" type="text" class="field-input" placeholder="192.168.1.xx" style="width:100%; padding:.85rem 1.1rem; border-radius:11px; background:rgba(255,255,255,.03); color:var(--fg); border:1px solid var(--border); font:600 .85rem 'DM Sans';">
+      </div>
+      <div class="prov-grid">
+        <div class="field">
+          <label>Utilisateur SSH</label>
+          <input id="prov-user" type="text" value="YOUR_COMPANY" style="width:100%; padding:.85rem 1.1rem; border-radius:11px; background:rgba(255,255,255,.03); color:var(--fg); border:1px solid var(--border); font:600 .85rem 'DM Sans';">
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input id="prov-pass" type="password" value="YOUR_COMPANY" style="width:100%; padding:.85rem 1.1rem; border-radius:11px; background:rgba(255,255,255,.03); color:var(--fg); border:1px solid var(--border); font:600 .85rem 'DM Sans';">
+        </div>
+      </div>
+      <button id="btn-test-ssh" onclick="testSSH()" class="btn primary" style="width:100%; justify-content:center; margin-top:.5rem;">
+        <i data-lucide="search"></i> Scanner le terminal
+      </button>
+    </div>
+
+    <div id="prov-result" style="display:none;">
+      <div style="display:flex; align-items:center; gap:1rem; padding:1.2rem; border-radius:14px; background:rgba(34,197,94,.08); border:1px solid rgba(34,197,94,.25); margin-bottom:1rem;">
+        <div style="width:42px; height:42px; border-radius:12px; background:var(--success); color:#0a0e1a; display:flex; align-items:center; justify-content:center;">
+          <i data-lucide="check" style="width:20px; height:20px;"></i>
+        </div>
+        <div>
+          <div style="font-size:.6rem; font-weight:800; letter-spacing:.25em; color:var(--success); text-transform:uppercase;">SSH OK</div>
+          <div id="prov-host-info" style="font-size:.8rem; font-weight:700; margin-top:.2rem;"></div>
+        </div>
+      </div>
+      <button onclick="startProvisioning()" class="btn primary" style="width:100%; justify-content:center;">
+        <i data-lucide="play"></i> Lancer l'installation
+      </button>
+    </div>
+
+    <div id="prov-progress" style="display:none;">
+      <div id="prov-log" class="terminal-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL : PUSH -->
+<div id="modal-push" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <p id="push-filename">—</p>
+        <h2>Diffuser le média</h2>
+      </div>
+      <button onclick="closePushModal()" class="modal-close"><i data-lucide="x"></i></button>
+    </div>
+
+    <div id="push-endpoint-list" class="endpoint-pick" style="margin-bottom:1.2rem;"></div>
+    <div style="display:flex; gap:.6rem;">
+      <button onclick="broadcastMediaFromModal()" class="btn primary" style="flex:1; justify-content:center;">
+        <i data-lucide="zap"></i> Toute la flotte
+      </button>
+      <button onclick="closePushModal()" class="btn" style="flex:1; justify-content:center;">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL : NEW FOLDER -->
+<div id="modal-folder" class="modal-overlay">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head">
+      <div>
+        <p>Médiathèque</p>
+        <h2>Nouveau dossier</h2>
+      </div>
+      <button onclick="closeNewFolder()" class="modal-close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="field">
+      <label>Nom du dossier</label>
+      <input id="new-folder-name" type="text" placeholder="Ex : Campagne 2026" style="width:100%; padding:.85rem 1.1rem; border-radius:11px; background:rgba(255,255,255,.03); color:var(--fg); border:1px solid var(--border); font:600 .85rem 'DM Sans';">
+    </div>
+    <button onclick="createFolder()" class="btn primary" style="width:100%; justify-content:center;">
+      <i data-lucide="folder-plus"></i> Créer le dossier
+    </button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast">
+  <div id="ti" class="ti"></div>
+  <div class="body">
+    <h4 id="tt">Système</h4>
+    <p id="tm2"></p>
+  </div>
+</div>
+
+<script>
+const socket = io();
+let state = { pending: {}, active: {}, configs: {} };
+let media = {{ media|tojson|safe }};
+let currentFolder = '';
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const j = s => JSON.stringify(String(s ?? '')).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+function showToast(msg, title='SYSTÈME', type='info') {
+  const t = document.getElementById('toast'), ti = document.getElementById('ti');
+  document.getElementById('tt').textContent = title;
+  document.getElementById('tm2').textContent = msg;
+  const ic = { success:'check-circle', error:'alert-triangle', info:'zap' }[type] || 'zap';
+  ti.className = 'ti ' + type;
+  ti.innerHTML = `<i data-lucide="${ic}"></i>`;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.classList.remove('show'), 4500);
+  lucide.createIcons();
+}
+
+function switchTab(tab) {
+  ['fleet','media','doc','admin'].forEach(t => {
+    const v = document.getElementById('view-'+t), b = document.getElementById('tb-'+t);
+    if (v) v.classList.toggle('active', t === tab);
+    if (b) b.classList.toggle('active', t === tab);
+  });
+  if (tab === 'admin') loadUsers();
+  lucide.createIcons();
+}
+
+function uploadFiles(files) {
+  if (!files.length) return;
+  const fd = new FormData();
+  for (let i=0; i<files.length; i++) fd.append('file', files[i]);
+  fd.append('folder', currentFolder);
+  fetch('/upload', { method:'POST', body:fd })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') {
+        media = d.media;
+        renderMedia(); renderFolders();
+        showToast(`${files.length} fichier(s) importé(s)`, 'Médiathèque', 'success');
+      } else showToast('Échec import', 'Erreur', 'error');
+    }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+}
+
+function relaunchNode(ip) {
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/restart`, { method:'POST' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') showToast('Service redémarré', 'Terminal', 'success');
+      else showToast(d.message || 'Erreur', 'Erreur', 'error');
+    }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+}
+function relaunchAll() {
+  if (!confirm('Relancer toute la flotte ?')) return;
+  fetch('/api/fleet/relaunch', { method:'POST' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') showToast(`${d.sent || 0} écran(s) relancé(s)`, 'Système', 'success');
+      else showToast(d.message || 'Erreur', 'Erreur', 'error');
+    });
+}
+function toggleScreen(ip, action) {
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/screen`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action})
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') showToast('Écran ' + (action === 'on' ? 'allumé' : 'éteint'), 'Écran', 'success');
+    else showToast(d.message || 'Erreur', 'Erreur', 'error');
+  });
+}
+function deleteEndpoint(ip) {
+  if (!confirm(`Supprimer définitivement l'écran ${ip} ?`)) return;
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/delete`, { method:'DELETE' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') showToast('Écran supprimé', 'Flotte', 'success');
+      else showToast(d.message || 'Erreur', 'Erreur', 'error');
+    });
+}
+function sshReload(ip) {
+  showToast('Tentative de relance SSH…', 'Système', 'info');
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/ssh-reload`, { method:'POST' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') showToast('Script relancé via SSH', 'Succès', 'success');
+      else showToast(d.message || 'Erreur SSH', 'Erreur', 'error');
+    }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+}
+function approvePending(ip) {
+  socket.emit('approve_endpoint', { ip });
+  showToast('Écran approuvé', 'Flotte', 'success');
+}
+function rejectPending(ip) {
+  if (!confirm(`Refuser l'écran ${ip} ?`)) return;
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/delete`, { method:'DELETE' })
+    .then(r => r.json()).then(() => showToast('Demande rejetée', 'Flotte', 'info'));
+}
+function renameEndpoint(ip, oldName) {
+  const newName = prompt('Nouveau nom pour cet écran :', oldName || '');
+  if (newName === null) return;
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/rename`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ name:newName.trim() })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') showToast('Écran renommé', 'Flotte', 'success');
+    else showToast(d.message || 'Erreur', 'Erreur', 'error');
+  });
+}
+function stopPresentation(ip) {
+  socket.emit('force_relaunch_node', { ip });
+  showToast('Présentation arrêtée', 'Diffusion', 'info');
+}
+
+function requestDelete(path) {
+  if (!confirm('Supprimer ce fichier définitivement ?')) return;
+  fetch('/delete/' + encodeURIComponent(path), { method:'POST' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') {
+        media = d.media; renderMedia();
+        showToast('Fichier supprimé', 'Médiathèque', 'success');
+      }
+    });
+}
+function requestRename(oldPath, oldName) {
+  const newName = prompt('Nouveau nom :', oldName);
+  if (!newName || newName === oldName) return;
+  fetch('/api/media/rename', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ old_path:oldPath, new_name:newName })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') {
+      media = d.media; renderMedia();
+      showToast('Fichier renommé', 'Médiathèque', 'success');
+    } else showToast(d.message, 'Erreur', 'error');
+  });
+}
+function deleteFolder(name) {
+  if (!confirm(`Supprimer le dossier « ${name} » et tout son contenu ?`)) return;
+  fetch(`/api/folders/${encodeURIComponent(name)}`, { method:'DELETE' })
+    .then(r => r.json()).then(d => {
+      if (d.status === 'success') {
+        media = d.media;
+        if (currentFolder === name) currentFolder = '';
+        renderFolders(); renderMedia();
+        showToast('Dossier supprimé', 'Médiathèque', 'success');
+      }
+    });
+}
+function renameFolder(oldName) {
+  const newName = prompt('Nouveau nom du dossier :', oldName);
+  if (!newName || newName === oldName) return;
+  fetch(`/api/folders/${encodeURIComponent(oldName)}/rename`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ new_name:newName })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') {
+      media = d.media;
+      if (currentFolder === oldName) currentFolder = newName;
+      renderFolders(); renderMedia();
+      showToast('Dossier renommé', 'Médiathèque', 'success');
+    } else showToast(d.message, 'Erreur', 'error');
+  });
+}
+
+function loadUsers() {
+  fetch('/api/users').then(r => r.json()).then(users => {
+    const list = document.getElementById('users-list');
+    list.innerHTML = Object.entries(users).map(([u, d]) => `
+      <div class="user-row">
+        <div class="l">
+          <div class="av ${d.role === 'admin' ? 'admin' : 'user'}">
+            <i data-lucide="${d.role === 'admin' ? 'shield-check' : 'user'}"></i>
+          </div>
+          <div>
+            <div class="name">${esc(u)}</div>
+            <div class="role">${esc(d.role)}</div>
+          </div>
+        </div>
+        ${u !== 'IT' ? `<button onclick="deleteUser(${j(u)})" class="action-mini danger" title="Supprimer">
+          <i data-lucide="trash-2"></i>
+        </button>` : ''}
+      </div>`).join('');
+    lucide.createIcons();
+  });
+}
+function addUser() {
+  const username = document.getElementById('new-username').value;
+  const password = document.getElementById('new-password').value;
+  const role = document.getElementById('new-role').value;
+  if (!username || !password) return showToast('Champs requis', 'Admin', 'error');
+  fetch('/api/users/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ username, password, role })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') {
+      showToast('Compte créé', 'Admin', 'success');
+      document.getElementById('new-username').value = '';
+      document.getElementById('new-password').value = '';
+      loadUsers();
+    } else showToast(d.message, 'Admin', 'error');
+  });
+}
+function deleteUser(username) {
+  if (!confirm(`Supprimer le compte ${username} ?`)) return;
+  fetch('/api/users/delete', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ username })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') { showToast('Compte supprimé', 'Admin', 'success'); loadUsers(); }
+    else showToast(d.message, 'Admin', 'error');
+  });
+}
+
+socket.on('update_ui', d => {
+  state = d;
+  renderStats();
+  renderPending();
+  renderFleet();
+  document.getElementById('fActive').textContent = Object.keys(state.active).length + ' écran(s)';
+});
+
+function renderStats() {
+  const all = Object.values(state.active);
+  const online = all.filter(n => n.status !== 'offline').length;
+  const offline = all.length - online;
+  const pending = Object.keys(state.pending || {}).length;
+  document.getElementById('stat-strip').innerHTML = `
+    <div class="stat">
+      <div class="label">Écrans connectés</div>
+      <div class="val gradient">${online}</div>
+      <div class="sub">${all.length} au total</div>
+    </div>
+    <div class="stat">
+      <div class="label">Hors-ligne</div>
+      <div class="val">${offline}</div>
+      <div class="sub">en attente de signal</div>
+    </div>
+    <div class="stat">
+      <div class="label">À approuver</div>
+      <div class="val" style="color:${pending ? 'var(--warning)' : 'var(--fg)'}">${pending}</div>
+      <div class="sub">demande${pending > 1 ? 's' : ''} en attente</div>
+    </div>
+    <div class="stat">
+      <div class="label">Médias</div>
+      <div class="val">${countMedia()}</div>
+      <div class="sub">fichiers diffusables</div>
+    </div>`;
+}
+function countMedia() {
+  let n = 0;
+  for (const k in (media.files || {})) n += (media.files[k] || []).length;
+  return n;
+}
+
+function renderPending() {
+  const zone = document.getElementById('pending-zone');
+  const entries = Object.entries(state.pending || {});
+  if (!entries.length) { zone.innerHTML = ''; return; }
+  zone.innerHTML = entries.map(([ip, node]) => `
+    <div class="pending-card">
+      <div class="info">
+        <div class="pulse"><i data-lucide="alert-circle"></i></div>
+        <div>
+          <h4>${esc(node.hostname || ip)}</h4>
+          <p>${esc(ip)} — en attente d'approbation</p>
+        </div>
+      </div>
+      <div class="pending-actions">
+        <button onclick="approvePending(${j(ip)})" class="btn primary">
+          <i data-lucide="check"></i> Approuver
+        </button>
+        <button onclick="rejectPending(${j(ip)})" class="action-mini danger" title="Rejeter">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function renderFleet() {
+  const grid = document.getElementById('fleet-grid');
+  const entries = Object.entries(state.active);
+  if (!entries.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="icon"><i data-lucide="monitor-off"></i></div>
+        <h3>Aucun terminal actif</h3>
+        <p>Cliquez sur « Ajouter écran » pour provisionner un nouveau kiosque.</p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+  grid.innerHTML = entries.map(([ip, node]) => {
+    const conf = state.configs[ip] || { timer:5, playlist:[] };
+    const online = node.status !== 'offline';
+    const name = node.custom_name || node.hostname || ip;
+    return `
+    <article class="screen-card">
+      <div class="preview">
+        <div class="placeholder"><i data-lucide="monitor"></i></div>
+        <img data-ip="${esc(ip)}" class="preview-screenshot" style="display:none; width:100%; height:100%; object-fit:cover;">
+        <div class="live-badge ${online ? 'online' : 'offline'}">
+          <span class="ld"></span>
+          <span>${online ? 'Live' : 'Offline'}</span>
+        </div>
+        <button onclick="loadScreenshot(${j(ip)})" class="refresh-btn" title="Rafraîchir">
+          <i data-lucide="refresh-ccw"></i>
+        </button>
+      </div>
+
+      <div class="screen-info">
+        <div class="screen-row">
+          <div class="screen-name">
+            <h3>${esc(name)}</h3>
+            <button onclick="renameEndpoint(${j(ip)}, ${j(node.custom_name || node.hostname || '')})" class="rename-pen" title="Renommer">
+              <i data-lucide="edit-3"></i>
+            </button>
+          </div>
+          <span class="status-chip ${online ? 'online' : 'offline'}">${online ? 'Connecté' : 'Perdu'}</span>
+        </div>
+
+        <div class="ip-line">${esc(ip)}</div>
+
+        <div class="config-pair">
+          <div class="config-cell">
+            <div class="l">Rafraîchissement</div>
+            <div class="v">
+              <input type="number" min="1" value="${conf.timer}" onchange="saveTimer(${j(ip)},this.value)">
+              <span class="unit">SEC</span>
+            </div>
+          </div>
+          <div class="config-cell">
+            <div class="l">Playlist</div>
+            <div class="v big">${conf.playlist.length} <span class="unit" style="margin-left:.3rem;">item${conf.playlist.length > 1 ? 's' : ''}</span></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button onclick="showSendToEndpoint(${j(ip)})" class="btn primary">
+            <i data-lucide="send"></i> Envoyer
+          </button>
+          ${online ? `<button onclick="stopPresentation(${j(ip)})" class="action-mini danger" title="Arrêter la présentation"><i data-lucide="square"></i></button>` : ''}
+          <button onclick="relaunchNode(${j(ip)})" class="action-mini warning" title="Redémarrer le service">
+            <i data-lucide="play"></i>
+          </button>
+          <button onclick="toggleScreen(${j(ip)},'on')" class="action-mini success" title="Allumer l'écran">
+            <i data-lucide="monitor"></i>
+          </button>
+          ${!online ? `<button onclick="sshReload(${j(ip)})" class="action-mini warning" title="Relance SSH"><i data-lucide="refresh-cw"></i></button>` : ''}
+          <button onclick="deleteEndpoint(${j(ip)})" class="action-mini danger" title="Supprimer">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+  lucide.createIcons();
+  entries.forEach(([ip]) => loadScreenshot(ip));
+}
+
+function showSendToEndpoint(ip) {
+  switchTab('media');
+  showToast('Sélectionnez un média à envoyer vers ce terminal', 'Diffusion', 'info');
+}
+function loadScreenshot(ip) {
+  const img = document.querySelector(`.preview-screenshot[data-ip="${CSS.escape(ip)}"]`);
+  if (!img) return;
+  const tmp = new Image();
+  tmp.onload = () => { img.src = tmp.src; img.style.display = 'block'; };
+  tmp.onerror = () => { img.style.display = 'none'; };
+  tmp.src = `/api/endpoint/${encodeURIComponent(ip)}/screenshot?t=${Date.now()}`;
+}
+function saveTimer(ip, value) {
+  const conf = state.configs[ip] || { playlist:[] };
+  socket.emit('update_node_config', { ip, timer:value, playlist:conf.playlist || [] });
+  showToast('Délai mis à jour', 'Config', 'success');
+}
+
+function renderMedia() {
+  const gal = document.getElementById('media-gallery');
+  const emp = document.getElementById('media-empty');
+  const fs = (media.files && media.files[currentFolder]) || [];
+  if (!fs.length) { gal.innerHTML = ''; emp.style.display = 'block'; return; }
+  emp.style.display = 'none';
+  gal.innerHTML = fs.map(m => {
+    const url = '/media/' + m.path.split('/').map(encodeURIComponent).join('/');
+    return `
+    <div class="media-card">
+      <div class="media-thumb">
+        ${m.type === 'image' ? `<img src="${esc(url)}" alt="">`
+          : m.type === 'video' ? `<video src="${esc(url)}#t=0.5" muted></video>`
+          : `<div class="pdf-mark"><i data-lucide="file-text"></i><span>PDF</span></div>`}
+        <div class="media-overlay">
+          <button onclick="showPushModal(${j(m.path)},${j(m.name)})" class="send" title="Diffuser"><i data-lucide="send"></i></button>
+          <button onclick="requestRename(${j(m.path)},${j(m.name)})" class="edit" title="Renommer"><i data-lucide="edit-3"></i></button>
+          <button onclick="requestDelete(${j(m.path)})" class="del" title="Supprimer"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+      <div class="media-meta">
+        <div class="info">
+          <div class="name">${esc(m.name)}</div>
+          <div class="type">${esc(m.type)}</div>
+        </div>
+        <button onclick="broadcastMedia(${j(m.path)})" class="zap" title="Diffuser à toute la flotte">
+          <i data-lucide="zap"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+function renderFolders() {
+  const ls = document.getElementById('folder-list');
+  // "Bibliothèque" (id vide) reste épinglée en tête : c'est la racine,
+  // pas un vrai dossier — donc ni renommable ni supprimable.
+  const root = { id:'', label:'Bibliothèque', icon:'layout-grid' };
+  const knownIcons = { Evenements:'calendar', RH:'users', Sensibilisation:'lightbulb' };
+  const folders = (media.folders || []).map(f => ({
+    id:f, label:f === 'Evenements' ? 'Événements' : f,
+    icon: knownIcons[f] || 'folder'
+  }));
+  ls.innerHTML = [root, ...folders].map(f => `
+    <div class="folder-item">
+      <button onclick="switchMediaFolder(${j(f.id)})" class="fbtn ${currentFolder === f.id ? 'active' : ''}">
+        <i data-lucide="${esc(f.icon)}"></i> ${esc(f.label)}
+      </button>
+      ${f.id !== '' ? `
+        <button onclick="renameFolder(${j(f.id)})" class="pen" title="Renommer"><i data-lucide="edit-3"></i></button>
+        <button onclick="deleteFolder(${j(f.id)})" class="pen danger" title="Supprimer"><i data-lucide="trash-2"></i></button>` : ''}
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function showNewFolder() { document.getElementById('modal-folder').classList.add('show'); }
+function closeNewFolder() { document.getElementById('modal-folder').classList.remove('show'); }
+function createFolder() {
+  const name = document.getElementById('new-folder-name').value.trim();
+  if (!name) return showToast('Nom requis', 'Médiathèque', 'error');
+  fetch('/api/media/create-folder', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ name })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') {
+      document.getElementById('new-folder-name').value = '';
+      showToast('Dossier créé', 'Médiathèque', 'success');
+      closeNewFolder();
+      location.reload();
+    } else showToast(d.message, 'Médiathèque', 'error');
+  });
+}
+
+function switchMediaFolder(f) { currentFolder = f; renderFolders(); renderMedia(); }
+
+let _pushPath = '';
+function showPushModal(path, name) {
+  _pushPath = path;
+  document.getElementById('push-filename').textContent = name;
+  renderPushList();
+  document.getElementById('modal-push').classList.add('show');
+  lucide.createIcons();
+}
+function closePushModal() { document.getElementById('modal-push').classList.remove('show'); }
+function renderPushList() {
+  const list = document.getElementById('push-endpoint-list');
+  const entries = Object.entries(state.active);
+  if (!entries.length) {
+    list.innerHTML = `<div style="text-align:center; color:var(--muted); padding:2rem .5rem; font-size:.8rem;">Aucun écran disponible</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(([ip, node]) => `
+    <button onclick="sendToEndpoint(${j(ip)})" class="endpoint-pick-row">
+      <div class="l">
+        <span class="ld ${node.status !== 'offline' ? 'online' : 'offline'}"></span>
+        <div class="info">
+          <div class="name">${esc(node.custom_name || node.hostname || ip)}</div>
+          <div class="ip">${esc(ip)}</div>
+        </div>
+      </div>
+      <i data-lucide="chevron-right"></i>
+    </button>`).join('');
+  lucide.createIcons();
+}
+function sendToEndpoint(ip) {
+  fetch(`/api/endpoint/${encodeURIComponent(ip)}/push`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ filepath:_pushPath })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') showToast('Fichier envoyé', 'Diffusion', 'success');
+    else showToast(d.message || 'Erreur', 'Erreur', 'error');
+  }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+  closePushModal();
+}
+function broadcastMedia(path) {
+  fetch('/api/fleet/broadcast', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ filepath:path })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'success') showToast(`${d.sent || 0} écran(s) mis à jour`, 'Diffusion globale', 'success');
+    else showToast(d.message || 'Erreur', 'Erreur', 'error');
+  }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+}
+function broadcastMediaFromModal() { broadcastMedia(_pushPath); closePushModal(); }
+
+function showProvisionModal() {
+  document.getElementById('modal-provision').classList.add('show');
+  document.getElementById('prov-form').style.display = 'block';
+  document.getElementById('prov-result').style.display = 'none';
+  document.getElementById('prov-progress').style.display = 'none';
+  document.getElementById('prov-log').innerHTML = '';
+  lucide.createIcons();
+}
+function closeProvisionModal() { document.getElementById('modal-provision').classList.remove('show'); }
+
+function testSSH() {
+  const ip = document.getElementById('prov-ip').value.trim();
+  const user = document.getElementById('prov-user').value.trim();
+  const pass = document.getElementById('prov-pass').value;
+  if (!ip || !user || !pass) return showToast('Champs requis', 'SSH', 'error');
+  const btn = document.getElementById('btn-test-ssh');
+  btn.innerHTML = '<i data-lucide="loader" style="animation:spin 1s linear infinite;"></i> Scan…';
+  lucide.createIcons();
+  fetch('/api/endpoint/test-ssh', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ ip, user, password:pass })
+  }).then(r => r.json()).then(d => {
+    btn.innerHTML = '<i data-lucide="search"></i> Scanner le terminal';
+    lucide.createIcons();
+    if (d.status === 'success') {
+      document.getElementById('prov-form').style.display = 'none';
+      document.getElementById('prov-result').style.display = 'block';
+      document.getElementById('prov-host-info').textContent =
+        d.hostname + (d.sysinfo ? ' · ' + d.sysinfo : '');
+      lucide.createIcons();
+    } else {
+      showToast(d.message || 'SSH échoué', 'Erreur', 'error');
+    }
+  }).catch(() => showToast('Erreur réseau', 'Erreur', 'error'));
+}
+function startProvisioning() {
+  const ip = document.getElementById('prov-ip').value.trim();
+  const user = document.getElementById('prov-user').value.trim();
+  const pass = document.getElementById('prov-pass').value;
+  document.getElementById('prov-result').style.display = 'none';
+  document.getElementById('prov-progress').style.display = 'block';
+  document.getElementById('prov-log').innerHTML = '';
+  fetch('/api/endpoint/provision', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ ip, user, password:pass, sid:socket.id })
+  });
+}
+socket.on('provision_progress', d => {
+  const log = document.getElementById('prov-log');
+  const div = document.createElement('div');
+  if (d.status === 'error') div.style.color = '#fca5a5';
+  if (d.status === 'done') div.style.color = '#86efac';
+  div.textContent = '> ' + d.msg;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  if (d.status === 'done') {
+    showToast('Installation terminée', 'Provisioning', 'success');
+    setTimeout(closeProvisionModal, 4000);
+  }
+});
+
+setInterval(() => {
+  const c = document.getElementById('clock');
+  if (c) c.textContent = new Date().toLocaleTimeString('fr-FR');
+}, 1000);
+document.addEventListener('DOMContentLoaded', () => {
+  renderStats(); renderFolders(); renderMedia();
+  if (window.location.hash === '#admin') switchTab('admin');
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>
